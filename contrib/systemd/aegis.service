@@ -1,0 +1,8 @@
+[Unit]
+Description=Aegis security check (read-only)
+
+[Service]
+Type=oneshot
+# Set this to the folder that holds the aegis package (the git checkout).
+WorkingDirectory=%h/aegis
+ExecStart=/usr/bin/python3 -m aegis check --save --no-fixes
