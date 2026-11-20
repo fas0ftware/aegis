@@ -1,7 +1,7 @@
 # Aegis
 
 [![CI](https://github.com/fas0ftware/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/fas0ftware/aegis/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Version](https://img.shields.io/badge/version-0.1.1-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
@@ -20,6 +20,7 @@ Named after the shield of Athena.
 ```bash
 git clone https://github.com/fas0ftware/aegis && cd aegis
 python3 -m aegis                 # check this machine
+python3 -m aegis --save          # ...and keep the result for Olympos
 python3 -m aegis explain firewall
 python3 -m aegis report aegis.html   # the same as one page (like the screenshot)
 python3 -m aegis --demo          # a made-up laptop, for trying it
@@ -86,7 +87,7 @@ escaping. CI also runs Aegis on its own runner (read-only) and bandit.
 
 ## Roadmap
 
-- Olympos shows the Aegis score and the failing checks.
+- ~~Olympos shows the Aegis score and the failing checks.~~ Done in Olympos 0.5 (reads `--save`'s status file).
 - More checks: Bluetooth discoverable, USB guard, browser updates, failed logins (as root).
 - Fedora (dnf-automatic) and Arch support for the update checks.
 

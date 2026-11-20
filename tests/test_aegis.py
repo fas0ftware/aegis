@@ -267,6 +267,11 @@ def test_cli(capsys, tmp_path, monkeypatch):
     assert cli.main(["list"]) == 0
     assert "disk-encryption" in capsys.readouterr().out
     assert cli.main(["--demo", "check", "--save"]) == 0
+    assert cli.main(["--demo", "--strict"]) == 1, "check is the default command, its options work without it"
+    assert cli.main(["--demo", "--json", "--only", "mac"]) == 0
+    assert cli._default_command(["--save", "--no-fixes"]) == ["check", "--save", "--no-fixes"]
+    assert cli._default_command(["--demo", "list"]) == ["--demo", "list"]
+    assert cli._default_command(["--version"]) == ["--version"]
     assert not (tmp_path / "status.json").exists(), "the demo never writes the real status file"
 
 

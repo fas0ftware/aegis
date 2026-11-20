@@ -21,6 +21,19 @@ def _probe(args):
     return Probe()
 
 
+COMMANDS = ("check", "explain", "report", "list")
+
+
+def _default_command(argv: list[str]) -> list[str]:
+    """`aegis --save` means `aegis check --save`: put "check" after the global options."""
+    i = 0
+    while i < len(argv) and argv[i] == "--demo":
+        i += 1
+    if i < len(argv) and (argv[i] in COMMANDS or argv[i] in ("-h", "--help", "--version")):
+        return argv
+    return argv[:i] + ["check"] + argv[i:]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="aegis", description="Read-only security check for a Linux laptop.")
     ap.add_argument("--version", action="version", version=f"aegis {__version__}")
@@ -37,7 +50,7 @@ def main(argv=None) -> int:
     rp = sub.add_parser("report", help="write the results as one HTML page")
     rp.add_argument("file", type=Path)
     sub.add_parser("list", help="list the checks")
-    args = ap.parse_args(argv)
+    args = ap.parse_args(_default_command(list(sys.argv[1:] if argv is None else argv)))
     cmd = args.cmd or "check"
 
     if cmd == "list":
