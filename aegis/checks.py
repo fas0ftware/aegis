@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import shlex
 import stat
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -488,6 +489,123 @@ def time_sync(probe, r):
     else:
         r.status, r.summary = "warn", "automatic time sync is off"
         r.fix = ["$ sudo timedatectl set-ntp true"]
+
+
+# --- browsers, radios, Wi-Fi ---------------------------------------------------------------
+
+BROWSER_SNAPS = ("firefox", "chromium", "brave", "vivaldi", "opera", "thunderbird")
+
+
+def _snap_revs(text: str) -> dict[str, str]:
+    """`snap list` -> {name: installed revision}."""
+    out = {}
+    for line in text.splitlines()[1:]:
+        cols = line.split()
+        if len(cols) >= 3:
+            out[cols[0]] = cols[2]
+    return out
+
+
+@check("browser-updates", "Browser updates", "medium",
+       "The browser opens untrusted pages all day, so its security fixes matter most and attackers "
+       "use a fixed bug within days. A snap browser is updated automatically, but only after it is "
+       "closed: one that stays open for weeks keeps running the old version while the new one "
+       "waits on disk. (Browsers from apt are covered by the security updates check.)")
+def browser_updates(probe, r):
+    listed = probe.run(["snap", "list"])
+    if listed is None or listed[0] != 0:
+        r.status, r.summary = "info", "no snap packages; browsers from apt are covered by the update checks"
+        return
+    installed = {n: rev for n, rev in _snap_revs(listed[1]).items() if n in BROWSER_SNAPS}
+    if not installed:
+        r.status, r.summary = "info", "no snap browser installed"
+        return
+    files = probe.listdir("/var/lib/snapd/snaps") or []
+    waiting, names = [], []
+    for name, rev in sorted(installed.items()):
+        downloaded = [int(f[len(name) + 1:-5]) for f in files
+                      if f.startswith(name + "_") and f.endswith(".snap") and f[len(name) + 1:-5].isdigit()]
+        if rev.isdigit() and downloaded and max(downloaded) > int(rev):
+            waiting.append(f"{name}: running revision {rev}, revision {max(downloaded)} is downloaded and waits")
+            names.append(name)
+    if waiting:
+        r.status, r.details = "warn", waiting
+        r.summary = f"{len(waiting)} browser update(s) downloaded but not installed: close the browser"
+        r.fix = ["Close the browser completely (all windows); snap installs the waiting version then. Or:",
+                 f"$ snap refresh {' '.join(names)}"]
+    else:
+        r.status = "pass"
+        r.summary = f"no downloaded update is waiting ({', '.join(sorted(installed))})"
+
+
+@check("bluetooth", "Bluetooth visibility", "low",
+       "A discoverable laptop announces its name to everyone nearby and accepts pairing requests, "
+       "which is how most Bluetooth attacks start. Discoverable is needed only while pairing a new "
+       "device; switching Bluetooth off when unused is safer still.")
+def bluetooth(probe, r):
+    out = probe.run(["bluetoothctl", "show"])
+    if out is None:
+        r.status, r.summary = "info", "bluetoothctl is not installed (no Bluetooth stack)"
+        return
+    kv = _kv(out[1], ":")
+    if not kv:
+        r.status, r.summary = "info", "no Bluetooth controller"
+        return
+    powered, disc = kv.get("Powered") == "yes", kv.get("Discoverable") == "yes"
+    if powered and disc:
+        r.status, r.summary = "warn", "Bluetooth is on and discoverable to everyone nearby"
+        r.fix = ["$ bluetoothctl discoverable off",
+                 "Or switch Bluetooth off in Settings when you do not use it."]
+    elif powered:
+        r.status, r.summary = "pass", "Bluetooth is on, not discoverable"
+    else:
+        r.status, r.summary = "pass", "Bluetooth is off"
+
+
+def _nm_wifi(probe) -> list[str] | None:
+    out = probe.run(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
+    if out is None or out[0] != 0:
+        return None
+    names = []
+    for line in out[1].splitlines():
+        # nmcli -t escapes ":" in names as "\:"
+        name, _, kind = line.replace("\\:", "\0").rpartition(":")
+        if kind == "802-11-wireless":
+            names.append(name.replace("\0", ":"))
+    return names
+
+
+@check("open-wifi", "Open Wi-Fi networks", "medium",
+       "A saved Wi-Fi network without a password is joined again by name, and anyone can create a "
+       "network with that name (\"Airport Free WiFi\"). The laptop then connects to them by itself, "
+       "and everything that is not encrypted end to end passes through their hands.")
+def open_wifi(probe, r):
+    names = _nm_wifi(probe)
+    if names is None:
+        r.status, r.summary = "unknown", "NetworkManager (nmcli) is not available"
+        return
+    risky, open_names, unknown = [], [], 0
+    for name in names:
+        out = probe.run(["nmcli", "-t", "-f", "802-11-wireless-security.key-mgmt,connection.autoconnect",
+                         "connection", "show", name])
+        if out is None or out[0] != 0:
+            unknown += 1
+            continue
+        kv = _kv(out[1], ":")
+        key = kv.get("802-11-wireless-security.key-mgmt", "")
+        if key in ("", "none") and kv.get("connection.autoconnect") == "yes":
+            risky.append(f"{name}: {'no password' if key == '' else 'WEP (broken)'}, joins automatically")
+            open_names.append(name)
+    if risky:
+        r.status, r.details = "warn", risky
+        r.summary = f"{len(risky)} saved open Wi-Fi network(s) join automatically"
+        r.fix = ["Forget them, or at least stop joining them by themselves:",
+                 *[f"$ nmcli connection modify {shlex.quote(n)} connection.autoconnect no" for n in open_names]]
+    elif unknown and unknown == len(names):
+        r.status, r.summary = "unknown", "the saved Wi-Fi networks could not be read"
+    else:
+        r.status = "pass"
+        r.summary = f"all {len(names)} saved Wi-Fi network(s) use a password" if names else "no saved Wi-Fi networks"
 
 
 # --- your files -------------------------------------------------------------------------------

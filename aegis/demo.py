@@ -1,7 +1,8 @@
 """A made-up laptop for screenshots and trying Aegis: python -m aegis --demo
 
 A typical fresh install with a few things left open: the firewall never switched on,
-no disk encryption, a key without a passphrase, a restart pending.
+no disk encryption, a key without a passphrase, a restart pending, a café's open
+Wi-Fi saved, a browser update waiting for the browser to be closed.
 """
 
 from __future__ import annotations
@@ -75,6 +76,7 @@ def probe(now: datetime | None = None) -> FakeProbe:
     }
     modes = {home: D | 0o750, f"{home}/.ssh": D | 0o700, f"{home}/.ssh/id_ed25519": F | 0o600,
              f"{home}/.ssh/work_rsa": F | 0o600, "/sys/firmware/efi": D | 0o755,
+             "/var/lib/snapd/snaps/firefox_9229.snap": F | 0o600, "/var/lib/snapd/snaps/firefox_9301.snap": F | 0o600,
              "/usr/local/bin": D | 0o755, "/usr/bin": D | 0o755, "/bin": D | 0o755, f"{home}/.local/bin": D | 0o755}
     commands = {
         ("systemctl", "is-active", "ufw"): (0, "active\n"),
@@ -88,6 +90,16 @@ def probe(now: datetime | None = None) -> FakeProbe:
         ("gsettings", "get", "org.gnome.desktop.session", "idle-delay"): (0, "uint32 300\n"),
         ("gsettings", "get", "org.gnome.desktop.screensaver", "lock-delay"): (0, "uint32 0\n"),
         ("timedatectl", "show"): (0, "NTP=yes\nNTPSynchronized=yes\n"),
+        ("snap", "list"): (0, "Name     Version   Rev   Tracking       Publisher  Notes\n"
+                               "core24   20261022  2307  latest/stable  canonical  base\n"
+                               "firefox  160.0-1   9229  latest/stable  mozilla    -\n"),
+        ("bluetoothctl", "show"): (0, "Controller 00:00:00:00:00:00 (public)\n\tPowered: yes\n\tDiscoverable: no\n"),
+        ("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"):
+            (0, "Home:802-11-wireless\nCafe Free WiFi:802-11-wireless\nlo:loopback\n"),
+        ("nmcli", "-t", "-f", "802-11-wireless-security.key-mgmt,connection.autoconnect", "connection", "show", "Home"):
+            (0, "802-11-wireless-security.key-mgmt:wpa-psk\nconnection.autoconnect:yes\n"),
+        ("nmcli", "-t", "-f", "802-11-wireless-security.key-mgmt,connection.autoconnect", "connection", "show",
+         "Cafe Free WiFi"): (0, "802-11-wireless-security.key-mgmt:\nconnection.autoconnect:yes\n"),
     }
     return FakeProbe(files=files, modes=modes, commands=commands,
                      environ={"PATH": f"{home}/.local/bin:/usr/local/bin:/usr/bin:/bin"})

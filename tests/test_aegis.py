@@ -218,6 +218,52 @@ def test_backups():
 
 # --- the whole run ----------------------------------------------------------------------------
 
+def by_id(id_, probe):
+    return one(probe, id_)
+
+
+NMC = ("nmcli", "-t", "-f", "802-11-wireless-security.key-mgmt,connection.autoconnect", "connection", "show")
+SNAPS = "Name  Version  Rev  Tracking  Publisher  Notes\nbrave  1.99  708  latest/stable  brave  -\nfirefox  160  9229  latest/stable  mozilla  -\ncode  1  281  latest/stable  vscode  classic\n"
+
+
+def test_browser_updates_from_downloaded_revisions():
+    def run(files):
+        return by_id("browser-updates", fake(commands={("snap", "list"): (0, SNAPS)},
+                                           modes={f"/var/lib/snapd/snaps/{f}": stat.S_IFREG | 0o600 for f in files}))
+    r = run(["brave_705.snap", "brave_708.snap", "brave_711.snap", "firefox_9229.snap", "code_300.snap"])
+    assert r.status == "warn" and r.details == ["brave: running revision 708, revision 711 is downloaded and waits"]
+    assert r.fix[-1] == "$ snap refresh brave", "only browsers count, code_300 is not one"
+    assert run(["brave_705.snap", "brave_708.snap", "firefox_9229.snap"]).status == "pass", "older revisions are kept"
+    assert by_id("browser-updates", fake()).status == "info"
+    assert by_id("browser-updates", fake(commands={("snap", "list"): (0, "Name Version Rev\ncore24 1 2\n")})).status == "info"
+
+
+def test_bluetooth():
+    def bt(text):
+        return by_id("bluetooth", fake(commands={("bluetoothctl", "show"): (0, text)}))
+    assert bt("Controller X\n\tPowered: yes\n\tDiscoverable: yes\n").status == "warn"
+    assert bt("Controller X\n\tPowered: yes\n\tDiscoverable: no\n").summary == "Bluetooth is on, not discoverable"
+    assert bt("Controller X\n\tPowered: no\n\tDiscoverable: yes\n").status == "pass", "off is off"
+    assert bt("No default controller available\n").status == "info"
+    assert by_id("bluetooth", fake()).status == "info"
+
+
+def test_open_wifi():
+    listing = "Home:802-11-wireless\nCafé\\: Free:802-11-wireless\nOld:802-11-wireless\nOff:802-11-wireless\neth:802-3-ethernet\n"
+    cmds = {("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"): (0, listing),
+            NMC + ("Home",): (0, "802-11-wireless-security.key-mgmt:sae\nconnection.autoconnect:yes\n"),
+            NMC + ("Café: Free",): (0, "802-11-wireless-security.key-mgmt:\nconnection.autoconnect:yes\n"),
+            NMC + ("Old",): (0, "802-11-wireless-security.key-mgmt:none\nconnection.autoconnect:yes\n"),
+            NMC + ("Off",): (0, "802-11-wireless-security.key-mgmt:\nconnection.autoconnect:no\n")}
+    r = by_id("open-wifi", fake(commands=cmds))
+    assert r.status == "warn" and r.summary.startswith("2 saved open")
+    assert r.details == ["Café: Free: no password, joins automatically", "Old: WEP (broken), joins automatically"]
+    assert "$ nmcli connection modify 'Café: Free' connection.autoconnect no" in r.fix, "names are quoted for the shell"
+    del cmds[NMC + ("Café: Free",)], cmds[NMC + ("Old",)]
+    assert by_id("open-wifi", fake(commands=cmds)).summary == "all 4 saved Wi-Fi network(s) use a password"
+    assert by_id("open-wifi", fake()).status == "unknown"
+
+
 def test_a_crashing_check_does_not_hide_the_others(monkeypatch):
     def boom(probe, r):
         raise ValueError("bad data")

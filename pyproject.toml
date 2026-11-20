@@ -1,6 +1,6 @@
 [project]
 name = "aegis"
-version = "0.1.1"
+version = "0.2.0"
 description = "Read-only security check for a Linux laptop, with the why and the fix for every finding"
 readme = "README.md"
 license = "MIT"

@@ -1,7 +1,7 @@
 # Aegis
 
 [![CI](https://github.com/fas0ftware/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/fas0ftware/aegis/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-0.1.1-blue)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
@@ -48,6 +48,9 @@ systemd say *unknown* elsewhere.
 | `ssh-keys` | medium | private keys without a passphrase (only the key header's cipher name is decoded) |
 | `path` | medium | `.` or world-writable folders in `PATH` (symlinks such as `/bin` are followed) |
 | `backups` | medium | the newest good backup in [Mnemosyne](https://github.com/fas0ftware/mnemosyne)'s status file |
+| `browser-updates` | medium | a snap browser (Firefox, Chromium, Brave, Vivaldi, Opera, Thunderbird) whose newer revision is already downloaded but waits for the browser to be closed (`snap list` and `/var/lib/snapd/snaps`, no network) |
+| `open-wifi` | medium | saved Wi-Fi networks without a password (or WEP) that join automatically (`nmcli`) |
+| `bluetooth` | low | Bluetooth on and discoverable (`bluetoothctl show`) |
 | `secure-boot` | low | Secure Boot on (`mokutil`) |
 | `time-sync` | low | the clock synchronized (`timedatectl`) |
 
@@ -88,7 +91,8 @@ escaping. CI also runs Aegis on its own runner (read-only) and bandit.
 ## Roadmap
 
 - ~~Olympos shows the Aegis score and the failing checks.~~ Done in Olympos 0.5 (reads `--save`'s status file).
-- More checks: Bluetooth discoverable, USB guard, browser updates, failed logins (as root).
+- ~~More checks: Bluetooth discoverable, browser updates.~~ Done in 0.2, with saved open Wi-Fi networks.
+- More checks: USB guard, failed logins (as root), Flatpak browsers.
 - Fedora (dnf-automatic) and Arch support for the update checks.
 
 ## License
